@@ -1,0 +1,17 @@
+# dependencies / build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# runtime persistence (assets/templates/settings live on a Docker volume)
+.data/
+data/
+
+# logs / OS cruft
+*.log
+.DS_Store
+._*
+
+# local env / secrets (never commit the Harbor password — REG_PASS is env-only)
+.env
+*.local

@@ -1,0 +1,56 @@
+# Munbyn ITPP941 label printing.
+#
+# IMPORTANT: the ITPP941 is a TSPL printer (USB IEEE-1284 id: CMD:XPP,XL), NOT
+# ZPL. CUPS cannot drive it reliably — its libusb backend detaches the kernel
+# usblp driver and wedges the printer. The label-studio service therefore talks
+# to the printer DIRECTLY over the kernel character device /dev/usb/lp0, writing
+# TSPL it generates itself. No CUPS in the print path.
+#
+# Usage on the Pi:
+#   docker compose up -d --build
+#   open http://<pi-ip>:8080
+#
+# /dev/usb/lp0 must exist on the host (the usblp driver provides it when the
+# printer is plugged in). Nothing else may claim the USB interface, or usblp
+# detaches — that's why the old CUPS container is retired (commented out below).
+
+services:
+  label-studio:
+    build: ./studio
+    container_name: munbyn-label-studio
+    hostname: munbyn-label-studio
+    restart: unless-stopped
+    ports:
+      - "8080:8080"            # web designer: http://<pi>:8080
+#     - "9100:9100"   # set ENABLE_RAW_9100=1 to use  (raw TSPL socket, optional)
+    volumes:
+      - "/dev/usb:/dev/usb"           # kernel usblp device dir (survives re-plug)
+      - "munbyn-data:/data"           # persisted assets / templates / settings
+    device_cgroup_rules:
+      - 'c 180:* rmw'                 # usblp character devices (major 180)
+    environment:
+      PORT: "8080"
+      PRINTER_DEVICE: "/dev/usb/lp0"
+      DATA_DIR: "/data"
+#     ENABLE_RAW_9100: "1"           # enable the raw TSPL socket on :9100 (above)
+
+volumes:
+  munbyn-data: {}
+
+# --- Retired: CUPS container --------------------------------------------------
+# Kept for reference. CUPS + this TSPL printer does not work: the libusb usb
+# backend detaches usblp and the printer never drains the data (prints nothing,
+# then wedges). If you ever need a network IPP queue, it would require a custom
+# CUPS backend that writes to /dev/usb/lp0 plus a raster->TSPL filter.
+#
+#  munbyn-cups:
+#    build: .
+#    image: oci.arsalan.io/munbyn/cups-itpp941:latest
+#    container_name: munbyn-cups
+#    restart: unless-stopped
+#    ports: ["631:631"]
+#    volumes: ["/dev/bus/usb:/dev/bus/usb"]
+#    device_cgroup_rules: ['c 189:* rmw']
+#    environment:
+#      CUPS_ADMIN_USER: "admin"
+#      CUPS_ADMIN_PASSWORD: "admin"
